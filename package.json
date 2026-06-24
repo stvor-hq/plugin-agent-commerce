@@ -1,0 +1,62 @@
+{
+  "name": "@stvor/plugin-agent-commerce",
+  "version": "0.2.0",
+  "description": "ERC-8183 agentic commerce for elizaOS agents: job lifecycle, SHA-256 payload attestation, reputation gating, and prompt-injection protection",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc --noEmit -p tsconfig.json",
+    "test": "bunx vitest run --config vitest.config.ts",
+    "test:watch": "bunx vitest --config vitest.config.ts",
+    "verify": "bun run type-check && bun run test",
+    "prepublishOnly": "bun run verify && bun run build"
+  },
+  "peerDependencies": {
+    "@elizaos/core": ">=1.0.0"
+  },
+  "devDependencies": {
+    "@elizaos/core": "^1.0.0",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.0"
+  },
+  "keywords": [
+    "elizaos",
+    "elizaos-plugin",
+    "agent-commerce",
+    "erc8183",
+    "agentic-commerce",
+    "ai-agents",
+    "reputation",
+    "escrow",
+    "prompt-injection",
+    "rate-limiting"
+  ],
+  "author": "Stvor Labs <hello@stvor.io>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stvor-hq/plugin-agent-commerce"
+  },
+  "homepage": "https://github.com/stvor-hq/plugin-agent-commerce#readme",
+  "bugs": {
+    "url": "https://github.com/stvor-hq/plugin-agent-commerce/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
