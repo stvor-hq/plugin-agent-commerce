@@ -82,9 +82,10 @@ describe('agentCommercePlugin shape', () => {
     expect(agentCommercePlugin.providers?.[0].name).toBe('COMMERCE_CONTEXT');
   });
 
-  it('registers COMMERCE_TRACKER evaluator', () => {
-    expect(agentCommercePlugin.evaluators).toHaveLength(1);
-    expect(agentCommercePlugin.evaluators?.[0].name).toBe('COMMERCE_TRACKER');
+  it('registers SECURITY_GUARD and COMMERCE_TRACKER evaluators', () => {
+    expect(agentCommercePlugin.evaluators).toHaveLength(2);
+    expect(agentCommercePlugin.evaluators?.[0].name).toBe('SECURITY_GUARD');
+    expect(agentCommercePlugin.evaluators?.[1].name).toBe('COMMERCE_TRACKER');
   });
 });
 

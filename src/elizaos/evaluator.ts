@@ -1,83 +1,90 @@
-import type {
-  Evaluator,
-  EvaluatorRunContext,
-  IAgentRuntime,
-  JSONSchema,
-  State,
-} from '@elizaos/core';
+import type { IAgentRuntime, Memory, State } from '@elizaos/core';
 import { MemoryType } from '@elizaos/core';
 import type { UUID } from '@elizaos/core';
+import { AgentCommerceService, AGENT_COMMERCE_SERVICE_TYPE } from '../service';
+import { getPluginLogger } from '../lib/logger';
 
 export { SecurityGuard } from '../lib/security';
 
-const SCHEMA: JSONSchema = {
-  type: 'object',
-  properties: {
-    tracked: { type: 'boolean' },
-    jobIds: { type: 'array', items: { type: 'string' } },
+export const securityEvaluator = {
+  name: 'SECURITY_GUARD',
+  description: 'Policy enforcement: rate limiting and prompt-injection heuristics on every message',
+  similes: ['secure message', 'check policy', 'validate payload'],
+  alwaysRun: true,
+  examples: [],
+  validate: async (_runtime: IAgentRuntime, _message: Memory): Promise<boolean> => true,
+  handler: async (
+    runtime: IAgentRuntime,
+    message: Memory,
+    _state?: State,
+  ): Promise<void> => {
+    const logger = getPluginLogger(runtime);
+    const sender = message.entityId ? String(message.entityId) : null;
+    const service = runtime.getService<AgentCommerceService>(AGENT_COMMERCE_SERVICE_TYPE);
+    const guard = service?.securityGuard;
+    const strictMode =
+      runtime.getSetting('STVOR_STRICT_MODE') === true ||
+      runtime.getSetting('STVOR_STRICT_MODE') === 'true';
+
+    if (!guard) {
+      logger.warn('[SECURITY-GUARD] AgentCommerceService not found — skipping payload check.');
+      return;
+    }
+
+    if (sender !== null) {
+      try {
+        guard.checkRateLimit(sender);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        if (strictMode) throw new Error(`[SECURITY-GUARD] ${reason}`);
+        logger.warn(`[SECURITY-GUARD] Rate limit warning for ${sender}: ${reason}`);
+      }
+    }
+
+    try {
+      guard.assertPayloadSafe(message.content);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      if (strictMode) throw new Error(`[SECURITY-GUARD] Message blocked: ${reason}`);
+      logger.warn(`[SECURITY-GUARD] Policy violation from ${sender}: ${reason}`);
+    }
   },
-  required: ['tracked', 'jobIds'],
-  additionalProperties: false,
 };
 
-export const commerceEvaluator: Evaluator<
-  { tracked: boolean; jobIds: string[] },
-  string[]
-> = {
+export const commerceEvaluator = {
   name: 'COMMERCE_TRACKER',
-  description: 'Extracts ERC-8183 job IDs from conversation and stores them in agent memory',
+  description: 'Extracts job IDs from conversation and stores them in agent memory',
   similes: ['track job', 'remember job'],
-  schema: SCHEMA,
-
-  async shouldRun({ message }: EvaluatorRunContext): Promise<boolean> {
+  alwaysRun: false,
+  examples: [],
+  validate: async (_runtime: IAgentRuntime, message: Memory): Promise<boolean> => {
     return /job-[\w-]+/i.test(message.content.text ?? '');
   },
-
-  async prepare({
-    runtime,
-    message,
-  }: EvaluatorRunContext & { state: State }): Promise<string[]> {
-    if (!message.entityId) return [];
+  handler: async (
+    runtime: IAgentRuntime,
+    message: Memory,
+    _state?: State,
+  ): Promise<void> => {
+    if (!message.entityId) return;
     const text = message.content.text ?? '';
-    const jobIds = text.match(/job-[\w-]+/gi) ?? [];
+    const jobIds = text.match(/job-[\w-]+/gi);
+    if (!jobIds?.length) return;
 
-    if (jobIds.length > 0) {
-      await runtime.createMemory(
-        {
-          entityId: message.entityId as UUID,
-          roomId: message.roomId as UUID,
-          agentId: runtime.agentId as UUID,
-          content: {
-            text: `Commerce job referenced: ${jobIds.join(', ')}`,
-            jobIds,
-          },
-          metadata: {
-            type: MemoryType.CUSTOM,
-            tags: ['agent-commerce'],
-          },
+    await runtime.createMemory(
+      {
+        entityId: message.entityId as UUID,
+        roomId: message.roomId as UUID,
+        agentId: runtime.agentId as UUID,
+        content: {
+          text: `Commerce job referenced: ${jobIds.join(', ')}`,
+          jobIds,
         },
-        'memories',
-      );
-    }
-
-    return jobIds;
-  },
-
-  prompt({ prepared: jobIds }: { prepared: string[] }): string {
-    if (jobIds.length === 0) {
-      return 'No ERC-8183 job IDs were found. Respond with {"tracked":false,"jobIds":[]}';
-    }
-    return `ERC-8183 job IDs extracted: ${jobIds.join(', ')}. Confirm with {"tracked":true,"jobIds":${JSON.stringify(jobIds)}}`;
-  },
-
-  parse(output: unknown): { tracked: boolean; jobIds: string[] } | null {
-    if (typeof output === 'object' && output !== null && 'tracked' in output) {
-      const o = output as Record<string, unknown>;
-      return {
-        tracked: Boolean(o.tracked),
-        jobIds: Array.isArray(o.jobIds) ? (o.jobIds as string[]) : [],
-      };
-    }
-    return null;
+        metadata: {
+          type: MemoryType.CUSTOM,
+          tags: ['agent-commerce'],
+        },
+      },
+      'memories',
+    );
   },
 };
